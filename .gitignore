@@ -1,6 +1,7 @@
 node_modules
 build
 .worktrees
+.superpowers
 .webp
 .DS_Store
 config.php
