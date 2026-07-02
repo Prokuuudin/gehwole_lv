@@ -10,7 +10,7 @@ function initSwiper(selector) {
   const isNews = selector === ".swiper-news";
   return new Swiper(container, {
     modules: isNews ? [Navigation, Autoplay] : [Navigation],
-    loop: true,
+    loop: !isNews,
     slidesPerView: 3,
     spaceBetween: 20,
 
