@@ -1,9 +1,8 @@
 .footer {
   position: relative;
   overflow: hidden;
-  border-top: 1px solid rgba(0, 0, 0, .08);
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, .04);
-  background: var(--footer-bg);
+  border-top: 3px solid var(--accent);
+  background: var(--accent-tint);
 }
 
 .footer__container {
@@ -181,8 +180,7 @@
   transform: scale(1.12);
 }
 
-p.footer-email,
-p.footer-phone {
+.footer__link-text {
   margin: 0;
 }
 
