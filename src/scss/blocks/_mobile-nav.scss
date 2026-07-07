@@ -8,11 +8,10 @@
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	justify-content: center;
-	padding-top: 40px;
-	padding-bottom: 40px;
+	padding: 40px var(--container-padding);
 	background: var(--accent);
 	transition: top 0.2s ease-in;
+	overflow-y: auto;
 }
 
 .mobile-nav--open {
@@ -30,9 +29,75 @@
 }
 
 .mobile-nav__list {
+	/* margin: auto вместо justify-content: center — центрирует, но не
+	   обрезает верх, когда раскрытый аккордеон выше экрана */
+	margin: auto;
+	width: 100%;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
 	row-gap: 20px;
 	font-size: 24px;
+}
+
+.mobile-nav__item {
+	width: 100%;
+	text-align: center;
+}
+
+.mobile-nav__toggle {
+	position: relative;
+	padding-right: 22px;
+	color: #fff;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+
+	&::after {
+		content: "";
+		position: absolute;
+		right: 2px;
+		top: 50%;
+		width: 8px;
+		height: 8px;
+		border-right: 2px solid currentColor;
+		border-bottom: 2px solid currentColor;
+		transform: translateY(-75%) rotate(45deg);
+		transition: transform 0.2s ease;
+	}
+
+	&:hover {
+		opacity: 0.8;
+	}
+}
+
+.mobile-nav__item--open > .mobile-nav__toggle::after {
+	transform: translateY(-25%) rotate(225deg);
+}
+
+.mobile-nav__sub {
+	overflow: hidden;
+	max-height: 0;
+	transition: max-height 0.3s ease;
+	font-size: 18px;
+
+	li {
+		margin-top: 14px;
+	}
+
+	.mobile-nav__sub {
+		font-size: 16px;
+	}
+}
+
+.mobile-nav__item--open > .mobile-nav__sub {
+	max-height: 1200px;
+}
+
+.mobile-nav__sublink {
+	color: #fff;
+	line-height: 1.3;
+
+	&:hover {
+		opacity: 0.8;
+	}
 }
