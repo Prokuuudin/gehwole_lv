@@ -56,9 +56,7 @@ function scrollRevealFunc() {
     distance: "18px",
   });
 
-  ScrollReveal().reveal(
-    `.news__slide, .products__slide, .solutions__item, .btn-link`,
-    {
+  ScrollReveal().reveal(`.news__slide, .products__slide, .btn-link`, {
       delay: 120,
       interval: 80,
       origin: "bottom",
