@@ -5,3 +5,11 @@ build
 .webp
 .DS_Store
 config.php
+/vendor/
+uploads/products/*
+uploads/news/*
+uploads/articles/*
+!uploads/products/.gitkeep
+!uploads/news/.gitkeep
+!uploads/articles/.gitkeep
+!uploads/.htaccess
