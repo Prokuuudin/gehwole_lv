@@ -87,7 +87,7 @@ Block: `.category`
 			<span class="category__crumb category__crumb--current">@@title</span>
 		</nav>
 
-		<h1 class="category__title title-1">@@title</h1>
+		<h1 class="category__title">@@title</h1>
 
 		<div class="category__grid">
 			<!-- 6 identical mock product-card blocks -->
