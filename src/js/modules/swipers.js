@@ -4,7 +4,7 @@ import "swiper/css";
 
 const newsSwiperConfig = {
   modules: [Autoplay],
-  loop: false,
+  loop: true,
   slidesPerView: 3,
   spaceBetween: 20,
 
