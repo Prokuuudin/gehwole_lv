@@ -100,8 +100,11 @@ field names as the original SQL design; ids are integers allocated as `max(id)+1
 `save_collection()` (`file_put_contents(..., LOCK_EX)`, pretty-printed, unescaped unicode).
 
 ```
-categories:  { id, parent_id (int|null), name, link_url (string|null), sort_order }
-             -- link_url set only on the 21 seeded legacy rows (see below)
+categories:  { id, parent_id (int|null), name, link_url (string|null), sort_order, seeded? }
+             -- link_url set only on the seeded leaf rows (see below)
+             -- seeded: true on all 21 committed rows; api.php?type=categories returns only
+                rows WITHOUT it (the whole seeded tree, groups included, already exists in
+                the static HTML — injecting any of it would duplicate entries)
 
 products:    { id, category_id, name, description, image (string|null), sort_order, created_at }
              -- category_id must be a LEAF category
