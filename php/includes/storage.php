@@ -24,7 +24,7 @@ function save_collection(string $collection, array $rows, ?string $dir = null): 
         array_values($rows),
         JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
     );
-    file_put_contents(storage_path($collection, $dir), $json, LOCK_EX);
+    file_put_contents(storage_path($collection, $dir), $json . "\n", LOCK_EX);
 }
 
 function next_id(array $rows): int
