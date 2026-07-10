@@ -1,6 +1,8 @@
 # Simple Admin Panel (products, news, articles) — Design
 
 Date: 2026-07-09
+Revised: 2026-07-10 — storage switched from MySQL/PDO to plain JSON files (`php/data/*.json`).
+No DB server on the hosting is required; PHP reads/writes JSON collections with `LOCK_EX`.
 
 ## Problem
 
@@ -31,7 +33,7 @@ existing static build/deploy process.
 
 Consequence for design: **nothing existing has real per-item content worth preserving** —
 products, news and articles are all symmetric. New products/news/articles are always
-brand-new DB rows, always get their own `*.php?id=` detail page, and are appended after the
+brand-new data rows, always get their own `*.php?id=` detail page, and are appended after the
 existing static mock cards/slides. The one exception is **categories**: the 17 line pages are
 real, permanent site structure (URLs, breadcrumbs, nav) even though the products shown on them
 are mock — those 21 category rows are seeded so the existing tree/links are preserved and
@@ -39,7 +41,8 @@ extendable.
 
 ## Decisions carried from brainstorming
 
-- Stack: PHP (PDO) + MySQL, session auth, single admin user (bcrypt).
+- Stack: PHP + JSON file storage (`php/data/*.json`), session auth, single admin user (bcrypt).
+  (Originally MySQL/PDO; revised 2026-07-10 — hosting needs nothing beyond PHP itself.)
 - Products have no pricing/checkout — description + photo only.
 - Existing static pages (produkts-1..6, raksts-1..5, jaunums-1..5, the 17 line pages) stay
   exactly as they are — never edited, never migrated content-wise.
@@ -57,7 +60,12 @@ pipeline completely untouched.
 
 ```
 php/
-  config.php          # DB credentials (gitignored), session bootstrap
+  data/                # JSON collections (the "database")
+    categories.json    # committed: 21 seeded rows (legacy tree)
+    products.json      # runtime, gitignored
+    news.json          # runtime, gitignored
+    articles.json      # runtime, gitignored
+    admin_users.json   # runtime, gitignored (created once on deploy)
   api.php              # public, read-only, JSON: ?type=products|news|articles[&category_id=]
   product.php          # ?id=  — detail page for a DB product
   category.php         # ?id=  — detail page for an admin-created leaf category
@@ -71,7 +79,7 @@ php/
     news.php                      # list/add/edit/delete
     articles.php                  # list/add/edit/delete
     includes/auth.php              # session guard, required at top of every admin/*.php but login.php
-  includes/db.php       # PDO connection, prepared-statement helpers
+  includes/storage.php  # JSON collection load/save (LOCK_EX), id allocation, sorting
 uploads/
   products/ news/ articles/       # uploaded images, .htaccess denies PHP execution
 ```
@@ -84,58 +92,35 @@ applies to that page. This is why the site can honestly stay "not dynamic" while
 new content: the HTML delivered by the server is static; a few extra DOM nodes are added
 client-side after load.
 
-## Data model (MySQL)
+## Data model (JSON collections)
 
-```sql
-categories (
-  id INT PK AUTO_INCREMENT,
-  parent_id INT NULL REFERENCES categories(id),
-  name VARCHAR(255),
-  link_url VARCHAR(255) NULL,   -- set only for the 21 seeded legacy rows (see below)
-  sort_order INT DEFAULT 0
-)
+Each collection is one file `php/data/{name}.json` holding an array of row objects. Same
+field names as the original SQL design; ids are integers allocated as `max(id)+1` by
+`storage.php`. A missing file reads as `[]`. All writes go through
+`save_collection()` (`file_put_contents(..., LOCK_EX)`, pretty-printed, unescaped unicode).
 
-products (
-  id INT PK AUTO_INCREMENT,
-  category_id INT REFERENCES categories(id),  -- must be a LEAF category
-  name VARCHAR(255),
-  description TEXT NULL,
-  image VARCHAR(255) NULL,
-  sort_order INT DEFAULT 0,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-)
--- no link_url: every product row is a brand-new item, always gets product.php?id=
+```
+categories:  { id, parent_id (int|null), name, link_url (string|null), sort_order }
+             -- link_url set only on the 21 seeded legacy rows (see below)
 
-news (
-  id INT PK AUTO_INCREMENT,
-  title VARCHAR(255),
-  date DATE NULL,
-  text TEXT NULL,
-  image VARCHAR(255) NULL,
-  sort_order INT DEFAULT 0,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-)
--- no link_url: same as products, every row is brand-new, always gets news.php?id=
+products:    { id, category_id, name, description, image (string|null), sort_order, created_at }
+             -- category_id must be a LEAF category
+             -- no link_url: every product row is brand-new, always gets product.php?id=
 
-articles (
-  id INT PK AUTO_INCREMENT,
-  title VARCHAR(255),
-  text TEXT NULL,
-  image VARCHAR(255) NULL,
-  sort_order INT DEFAULT 0,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-)
--- no link_url: same as products, every row is brand-new, always gets article.php?id=
+news:        { id, title, date (string|null), text, image, sort_order, created_at }
 
-admin_users ( id INT PK, username VARCHAR(255), password_hash VARCHAR(255) )
+articles:    { id, title, text, image, sort_order, created_at }
+
+admin_users: { id, username, password_hash }
 ```
 
-**Seed data** (one-time SQL migration, run manually via phpMyAdmin/CLI on deploy):
-- `categories` only: 3 top groups (no `link_url`) → their 17 leaves (`link_url` = the real
-  filename, e.g. `gehwol-classic.html`) → under Tehnika, the `Rotējošie instrumenti` subgroup
-  (no `link_url`) → its 3 leaves (`link_url` set). 21 rows total.
+**Seed data**:
+- `categories.json` only, committed to git: 3 top groups (no `link_url`) → their 17 leaves
+  (`link_url` = the real filename, e.g. `gehwol-classic.html`) → under Tehnika, the
+  `Rotējošie instrumenti` subgroup (no `link_url`) → its 3 leaves (`link_url` set). 21 rows total.
 - `products`/`news`/`articles`: no seed rows at all — the existing mock cards/slides are not
-  modeled in the DB, they simply stay in the static HTML as today.
+  modeled in the data files, they simply stay in the static HTML as today. Their `.json`
+  files are gitignored and simply don't exist until the admin first saves something.
 
 For categories, a row with `link_url` set is a "legacy" row: the tree links straight to that
 static file. A row without it (admin-created) is a "live" row: it links to `category.php?id=`.
@@ -163,7 +148,7 @@ list), and `.products__grid` itself gets nothing special. On load, JS calls
   for completeness, no dedicated grep-checked acceptance criteria since none exist today).
 
 New leaf categories (created via admin) get no static file — `category.php?id=` renders the
-same breadcrumb/grid markup purely from DB (its own products via `category_id`).
+same breadcrumb/grid markup purely from the data files (its own products via `category_id`).
 
 News/articles: the two existing sliders already end with 5 static mock slides each. JS appends
 one extra `<div class="news__slide swiper-slide">` per row from `api.php?type=news` /
@@ -187,11 +172,14 @@ content-injection module).
 
 ## Security
 
-- PDO prepared statements everywhere, no string-concatenated SQL.
+- No SQL at all — no injection surface; ids cast to `(int)` on read, all output HTML-escaped.
+- All JSON writes via one helper using `file_put_contents(..., LOCK_EX)` — no partial writes
+  under concurrent requests (single admin, low traffic; a full RDBMS would be overkill).
+- `php/data/.htaccess` denies all HTTP access — collections are only readable through
+  `api.php`, never fetched directly (keeps `admin_users.json` hashes off the wire).
 - `password_hash()`/`password_verify()`, PHP session, no home-rolled crypto.
 - `uploads/.htaccess`: `php_flag engine off` (or `Options -ExecCGI`) so an uploaded file can
   never execute as PHP.
-- `config.php` (DB credentials) is gitignored; a `config.example.php` is committed instead.
 
 ## Deploy
 
@@ -199,11 +187,12 @@ content-injection module).
 - New gulp task copies `php/**/*` into `build/php/` and `uploads/**/*` into `build/uploads/`
   verbatim (no transformation) — one `gulp.src().pipe(gulp.dest())`, added to the existing
   `docs`/`dev` task chains.
-- One-time on the hosting: create the MySQL DB, run the migration+seed SQL file, copy
-  `config.example.php` → `config.php` and fill in real credentials, create the first admin
-  user by generating a hash locally (`php -r "echo password_hash('yourpassword', PASSWORD_DEFAULT);"`)
-  and inserting it into `admin_users` — documented as a step in the migration file's header
-  comment, no setup script needed (one-time action, no reason to leave that code in prod).
+- One-time on the hosting: make `php/data/` and `uploads/*` writable by the web server, then
+  create the admin user file locally and upload it:
+  `php -r "file_put_contents('admin_users.json', json_encode([['id'=>1,'username'=>'admin','password_hash'=>password_hash('yourpassword', PASSWORD_DEFAULT)]]));"`
+  → put the result at `php/data/admin_users.json`. No DB, no migration, no config file.
+- **Redeploy caution:** the live `php/data/*.json` and `uploads/**` accumulate the owner's
+  real content — a redeploy must never overwrite those two directories wholesale.
 
 ## Out of scope (v1)
 
@@ -224,6 +213,6 @@ content-injection module).
   that line's page (`gehwol-classic.html`) after gulp build+reload, and that a brand-new news
   item appears as an extra slide with a working `news.php?id=` page.
 - `gulp docs` still completes without errors and without touching `php/`.
-- Deleting an uploaded image's DB row doesn't 500 (file removal best-effort, not required to
-  succeed for the DB delete to succeed).
+- Deleting an uploaded image's data row doesn't 500 (file removal best-effort, not required to
+  succeed for the row delete to succeed).
 - Direct requests to `admin/*.php` without a session redirect to `login.php`.

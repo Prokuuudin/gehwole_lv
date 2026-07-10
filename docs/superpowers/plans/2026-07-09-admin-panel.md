@@ -2,21 +2,34 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a PHP+MySQL admin panel that lets the site owner add products, news and articles, layered onto the existing static gulp site without touching its fragile HTML build pipeline.
+**Goal:** Add a PHP admin panel (JSON file storage) that lets the site owner add products, news and articles, layered onto the existing static gulp site without touching its fragile HTML build pipeline.
 
-**Architecture:** New `php/` directory (PDO+MySQL, session auth, single admin user) lives outside the gulp pipeline and is copied verbatim into `build/` by a new gulp task. Existing static pages stay untouched; a small JS module fetches new content as JSON from `php/api.php` and injects it into the DOM (product cards, category links, news/article slides) after page load. New products/news/articles always get their own PHP detail page (`product.php?id=`, `news.php?id=`, `article.php?id=`); only `categories` carries a legacy/live split (`link_url` set = points at one of the 21 seeded rows representing the real existing category tree; `link_url` null = admin-created, gets `category.php?id=`).
+**Architecture:** New `php/` directory (JSON collections in `php/data/`, session auth, single admin user) lives outside the gulp pipeline and is copied verbatim into `build/` by a new gulp task. Existing static pages stay untouched; a small JS module fetches new content as JSON from `php/api.php` and injects it into the DOM (product cards, category links, news/article slides) after page load. New products/news/articles always get their own PHP detail page (`product.php?id=`, `news.php?id=`, `article.php?id=`); only `categories` carries a legacy/live split (`link_url` set = points at one of the 21 seeded rows representing the real existing category tree; `link_url` null = admin-created, gets `category.php?id=`).
 
-**Tech Stack:** PHP 8 (PDO, sessions, no framework), MySQL/MariaDB, PHPUnit 10 (pure-logic unit tests only — CRUD/auth/rendering pages are verified manually since they need a live DB and HTTP server), vanilla JS (bundled by the existing webpack config), gulp (one new passthrough task).
+**Tech Stack:** PHP 8 (sessions, no framework, no DB — JSON files under `php/data/`), PHPUnit 10 (pure-logic unit tests only — CRUD/auth/rendering pages are verified manually since they need an HTTP server), vanilla JS (bundled by the existing webpack config), gulp (one new passthrough task).
+
+## Revision 2026-07-10 — JSON storage instead of MySQL
+
+Storage switched from MySQL/PDO to plain JSON files (no DB server available or wanted on the hosting). Everywhere a task below shows PDO/SQL code, the JSON storage API applies instead; the pages, routes, JSON API shapes, gulp wiring and JS injection are unchanged. Concretely:
+
+- **Dropped:** `php/includes/db.php`, `php/migrations/001_init.sql`, `php/config.example.php`, local `php/config.php`, all MySQL setup steps.
+- **Added:** `php/includes/storage.php` — `load_collection(string $name): array` (missing file → `[]`), `save_collection(string $name, array $rows): void` (`file_put_contents(..., LOCK_EX)`, pretty JSON, unescaped unicode), `next_id(array $rows): int` (`max(id)+1`), `sort_rows(array $rows): array` (by `sort_order`, then `id`). Collections live at `php/data/{name}.json`.
+- **Seed:** `php/data/categories.json` committed with the same 21 rows/ids as Task 2's seed table (ids 1–21 stay authoritative). `products/news/articles/admin_users` JSON files are gitignored, created at runtime.
+- **Admin user (replaces Task 2 Steps 2–4):** `php -r "file_put_contents('php/data/admin_users.json', json_encode([['id'=>1,'username'=>'admin','password_hash'=>password_hash('changeme123', PASSWORD_DEFAULT)]]));"`
+- **Task 6 auth:** pure `find_admin_in(array $users, string $username): ?array` (unit-tested) + `find_admin_by_username()` delegating to it over `load_collection('admin_users')`.
+- **Tasks 8–13:** same pages/flows; row lookups/filters/mutations are array operations + `save_collection` instead of prepared statements. Deletes filter the array; referential checks (category has children/products) scan the arrays.
+- **Security:** `php/data/.htaccess` denies HTTP access to raw JSON (admin hashes never served); no SQL at all.
+- **Deploy:** hosting needs only PHP; make `php/data/` + `uploads/*` writable by the web server. Redeploys must never overwrite live `php/data/` or `uploads/` (owner content lives there).
 
 ## Global Constraints
 
 - No pricing/checkout anywhere — products are description + photo only (per spec).
 - Existing static files (`produkts-1..6.html`, `raksts-1..5.html`, `jaunums-1..5.html`, the 17 category line pages, `index.html`) are never edited for content and never renamed — only `products.html` and the 17 line pages' `@@include` calls get one added parameter/attribute each (structural, not content).
 - Single admin user, bcrypt (`password_hash`/`password_verify`), PHP session auth.
-- All SQL via PDO prepared statements — no string-concatenated queries anywhere.
+- All data writes via `save_collection()` (LOCK_EX) — no ad-hoc file writes anywhere; ids cast to `(int)`, all HTML output escaped.
 - Uploaded images: extensions `jpg`, `jpeg`, `png`, `webp` only, max 5 MB, stored under `uploads/{products,news,articles}/` with a generated filename, `uploads/.htaccess` denies PHP execution.
 - `gulp docs` (→ `docs/`, GitHub Pages) is **out of scope** for this plan and must not be touched — only `gulp`/`gulp default` (→ `build/`) gets the new copy task.
-- Category IDs are fixed by the seed migration (see Task 2) — every task that references a category id (the 17 line pages' `categoryId` param, `products.html`'s `data-category-id` attributes) must use exactly these ids, not placeholders.
+- Category IDs are fixed by the seed data (see Task 2) — every task that references a category id (the 17 line pages' `categoryId` param, `products.html`'s `data-category-id` attributes) must use exactly these ids, not placeholders.
 
 ---
 
